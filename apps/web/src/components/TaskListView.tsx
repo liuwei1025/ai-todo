@@ -11,7 +11,6 @@ interface TaskListViewProps {
   onCompleteTask: (taskId: string) => Promise<void>;
   onArchiveTask: (taskId: string) => Promise<void>;
   onRememberTask: (task: Task) => Promise<void>;
-  onStartFocusSession: () => void;
   onUpdateTask: (
     taskId: string,
     patch: Omit<TaskUpdateInput, "id">,
@@ -272,7 +271,6 @@ export function TaskListView({
   onCompleteTask,
   onArchiveTask,
   onRememberTask,
-  onStartFocusSession,
   onUpdateTask,
 }: TaskListViewProps) {
   const visibleTasks = tasks.filter((task) => task.status !== "archived");
@@ -285,22 +283,6 @@ export function TaskListView({
 
   return (
     <section className="panel list-panel">
-      <div className="list-panel-toolbar">
-        <div className="list-panel-tools">
-          <span className="list-filter-pill">策略: {strategy.name}</span>
-          <span className="list-filter-pill">任务: {visibleTasks.length}</span>
-          {strategy.id === "deep-work" ? (
-            <button
-              type="button"
-              className="ghost-button"
-              onClick={onStartFocusSession}
-            >
-              开始 25 分钟专注
-            </button>
-          ) : null}
-        </div>
-      </div>
-
       {groupedColumns.length > 0 ? (
         <div className="task-feed" data-testid="task-list-view">
           {groupedColumns.map((column) => (

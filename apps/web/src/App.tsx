@@ -38,7 +38,38 @@ interface PreviewSection {
   items: string[];
 }
 
+type FocusSessionState = "idle" | "running" | "paused";
+
 const defaultEmbeddingClient = new BrowserEmbeddingClient();
+const FOCUS_DURATION_SECONDS = 25 * 60;
+
+const formatFocusTime = (seconds: number) =>
+  `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+
+function FocusControlIcon({ kind }: { kind: "start" | "pause" | "stop" }) {
+  if (kind === "pause") {
+    return (
+      <svg viewBox="0 0 16 16" aria-hidden="true" className="button-icon">
+        <rect x="3" y="2.5" width="3.2" height="11" rx="1" fill="currentColor" />
+        <rect x="9.8" y="2.5" width="3.2" height="11" rx="1" fill="currentColor" />
+      </svg>
+    );
+  }
+
+  if (kind === "stop") {
+    return (
+      <svg viewBox="0 0 16 16" aria-hidden="true" className="button-icon">
+        <rect x="3" y="3" width="10" height="10" rx="2" fill="currentColor" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className="button-icon">
+      <path d="M4 2.8v10.4c0 .63.68 1.02 1.22.7l7.46-4.94a.82.82 0 0 0 0-1.38L5.22 2.1A.82.82 0 0 0 4 2.8Z" fill="currentColor" />
+    </svg>
+  );
+}
 
 const draftPreviewFrom = (
   draft: string,
@@ -117,7 +148,7 @@ export default function App({
   const [isOnline, setIsOnline] = useState(
     typeof navigator === "undefined" ? true : navigator.onLine,
   );
-  const [focusMessage, setFocusMessage] = useState<string | null>(null);
+  const [focusSessionState, setFocusSessionState] = useState<FocusSessionState>("idle");
   const [focusSecondsLeft, setFocusSecondsLeft] = useState<number | null>(null);
   const focusTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isCommandFocused, setIsCommandFocused] = useState(false);
@@ -265,27 +296,54 @@ export default function App({
       focusTimerRef.current = null;
     }
     setFocusSecondsLeft(null);
-    setFocusMessage(null);
+    setFocusSessionState("idle");
   }, []);
 
-  const handleStartFocusSession = useCallback(() => {
-    stopFocusSession();
-
-    const FOCUS_DURATION_SECONDS = 25 * 60;
-    setFocusSecondsLeft(FOCUS_DURATION_SECONDS);
-    setFocusMessage("专注时段进行中，请集中处理一项高价值任务。");
-
+  const startFocusCountdown = useCallback(() => {
     focusTimerRef.current = setInterval(() => {
       setFocusSecondsLeft((prev) => {
         if (prev === null || prev <= 1) {
           stopFocusSession();
-          setFocusMessage("专注时段已结束，辛苦了！你可以回顾刚才的进展或开始下一轮。");
           return null;
         }
         return prev - 1;
       });
     }, 1000);
   }, [stopFocusSession]);
+
+  const handleStartFocusSession = useCallback(() => {
+    stopFocusSession();
+    setFocusSecondsLeft(FOCUS_DURATION_SECONDS);
+    setFocusSessionState("running");
+    startFocusCountdown();
+  }, [startFocusCountdown, stopFocusSession]);
+
+  const handleToggleFocusSession = useCallback(() => {
+    if (focusSessionState === "running") {
+      if (focusTimerRef.current) {
+        clearInterval(focusTimerRef.current);
+        focusTimerRef.current = null;
+      }
+      setFocusSessionState("paused");
+      return;
+    }
+
+    if (focusSessionState === "paused") {
+      setFocusSessionState("running");
+      startFocusCountdown();
+      return;
+    }
+
+    handleStartFocusSession();
+  }, [focusSessionState, handleStartFocusSession, startFocusCountdown]);
+
+  const focusPrimaryActionLabel =
+    focusSessionState === "idle"
+      ? "25 min"
+      : formatFocusTime(focusSecondsLeft ?? 0);
+
+  const focusPrimaryActionIcon =
+    focusSessionState === "running" ? "pause" : "start";
 
   const handleCompleteTask = async (taskId: string) => {
     setError(null);
@@ -414,31 +472,64 @@ export default function App({
 
       <section className="main-stage">
         <header className="status-bar">
-          <div className="status-pill">当前策略: {activeStrategy.name}</div>
-          <div className="status-pill">任务总数: {visibleTaskCount}</div>
-          <div className={`status-dot ${isOnline ? "online" : "offline"}`}>
-            {isOnline ? "在线推理可用" : "当前离线"}
+          <div className="status-bar-main">
+            <div className="status-pill">当前策略: {activeStrategy.name}</div>
+            <div className="status-pill">任务总数: {visibleTaskCount}</div>
+            <div className={`status-dot ${isOnline ? "online" : "offline"}`}>
+              {isOnline ? "在线推理可用" : "当前离线"}
+            </div>
           </div>
-        </header>
-
-        {focusMessage ? (
-          <div className="focus-banner">
-            <span>
-              {focusMessage}
-              {focusSecondsLeft !== null
-                ? ` ${String(Math.floor(focusSecondsLeft / 60)).padStart(2, "0")}:${String(focusSecondsLeft % 60).padStart(2, "0")}`
-                : null}
-            </span>
-            {focusSecondsLeft !== null ? (
-              <button type="button" className="ghost-button" onClick={stopFocusSession}>
-                结束专注
+          {activeStrategyId === "deep-work" ? (
+            <div className="status-bar-actions">
+              <button
+                type="button"
+                className={`ghost-button status-bar-action ${
+                  focusSessionState !== "idle" ? "active" : ""
+                }`}
+                onClick={handleToggleFocusSession}
+                aria-label={
+                  focusSessionState === "running"
+                    ? "暂停专注"
+                    : focusSessionState === "paused"
+                      ? "继续专注"
+                      : "开始专注"
+                }
+                title={
+                  focusSessionState === "running"
+                    ? "暂停专注"
+                    : focusSessionState === "paused"
+                      ? "继续专注"
+                      : "开始专注"
+                }
+              >
+                <FocusControlIcon kind={focusPrimaryActionIcon} />
+                <span>{focusPrimaryActionLabel}</span>
               </button>
-            ) : null}
-          </div>
-        ) : null}
+              {focusSessionState !== "idle" ? (
+                <button
+                  type="button"
+                  className="ghost-button status-bar-action status-bar-action-secondary"
+                  onClick={stopFocusSession}
+                  aria-label="停止专注"
+                  title="停止专注"
+                >
+                  <FocusControlIcon kind="stop" />
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </header>
 
         <div className="content-grid">
           <div className="primary-column">
+            <TaskListView
+              tasks={tasks}
+              strategy={activeStrategy}
+              onCompleteTask={handleCompleteTask}
+              onArchiveTask={handleArchiveTask}
+              onRememberTask={handleRememberTask}
+              onUpdateTask={handleUpdateTask}
+            />
             <ChatPanel
               draft={draft}
               pending={pending}
@@ -446,15 +537,6 @@ export default function App({
               onDraftChange={setDraft}
               onSend={handleSend}
               onFocusChange={setIsCommandFocused}
-            />
-            <TaskListView
-              tasks={tasks}
-              strategy={activeStrategy}
-              onCompleteTask={handleCompleteTask}
-              onArchiveTask={handleArchiveTask}
-              onRememberTask={handleRememberTask}
-              onStartFocusSession={handleStartFocusSession}
-              onUpdateTask={handleUpdateTask}
             />
           </div>
 
