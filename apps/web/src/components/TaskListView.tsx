@@ -1,13 +1,33 @@
-import type { StrategyPluginSnapshot, Task } from "@ai-todo/contracts";
+import { useEffect, useState } from "react";
+import type {
+  StrategyPluginSnapshot,
+  Task,
+  TaskUpdateInput,
+} from "@ai-todo/contracts";
 
 interface TaskListViewProps {
   tasks: Task[];
   strategy: StrategyPluginSnapshot;
-  pending: boolean;
-  onCompleteTask: (taskId: string) => void;
-  onArchiveTask: (taskId: string) => void;
-  onRememberTask: (task: Task) => void;
+  onCompleteTask: (taskId: string) => Promise<void>;
+  onArchiveTask: (taskId: string) => Promise<void>;
+  onRememberTask: (task: Task) => Promise<void>;
   onStartFocusSession: () => void;
+  onUpdateTask: (
+    taskId: string,
+    patch: Omit<TaskUpdateInput, "id">,
+  ) => Promise<void>;
+}
+
+interface TaskRowProps {
+  task: Task;
+  strategy: StrategyPluginSnapshot;
+  onCompleteTask: (taskId: string) => Promise<void>;
+  onArchiveTask: (taskId: string) => Promise<void>;
+  onRememberTask: (task: Task) => Promise<void>;
+  onUpdateTask: (
+    taskId: string,
+    patch: Omit<TaskUpdateInput, "id">,
+  ) => Promise<void>;
 }
 
 const priorityLabel: Record<Task["priority"], string> = {
@@ -32,14 +52,228 @@ const statusToneClass: Record<Task["status"], string> = {
   archived: "tone-archived",
 };
 
+const dateInputValueFrom = (value: string | null | undefined) =>
+  value ? value.slice(0, 10) : "";
+
+const toDueAtIso = (value: string) => {
+  if (!value) {
+    return null;
+  }
+
+  return new Date(`${value}T12:00:00`).toISOString();
+};
+
+function EditableTaskRow({
+  task,
+  strategy,
+  onCompleteTask,
+  onArchiveTask,
+  onRememberTask,
+  onUpdateTask,
+}: TaskRowProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [noteDraft, setNoteDraft] = useState(task.notes ?? "");
+  const [isSavingNotes, setIsSavingNotes] = useState(false);
+
+  useEffect(() => {
+    setNoteDraft(task.notes ?? "");
+  }, [task.id, task.notes]);
+
+  const saveNotes = async () => {
+    const normalized = noteDraft.trim();
+    const nextValue = normalized ? normalized : null;
+    if ((task.notes ?? null) === nextValue) {
+      return;
+    }
+
+    setIsSavingNotes(true);
+    try {
+      await onUpdateTask(task.id, { notes: nextValue });
+    } finally {
+      setIsSavingNotes(false);
+    }
+  };
+
+  const handleQuickUpdate = async (
+    field: "status" | "priority" | "strategyBucket" | "dueAt",
+    value: string,
+  ) => {
+    if (field === "dueAt") {
+      await onUpdateTask(task.id, { dueAt: toDueAtIso(value) });
+      return;
+    }
+
+    if (field === "status") {
+      await onUpdateTask(task.id, { status: value as Task["status"] });
+      return;
+    }
+
+    if (field === "priority") {
+      await onUpdateTask(task.id, { priority: value as Task["priority"] });
+      return;
+    }
+
+    await onUpdateTask(task.id, { strategyBucket: value });
+  };
+
+  return (
+    <article className="task-row">
+      <div className={`task-status-dot ${statusToneClass[task.status]}`} />
+      <div className="task-row-main">
+        <div className="task-row-top">
+          <strong>{task.title}</strong>
+          <div className="task-row-tags">
+            <span className="pill">{statusLabel[task.status]}</span>
+            <span className="pill">{priorityLabel[task.priority]}</span>
+            <span className="pill">
+              {task.type === "project" ? "项目" : "任务"}
+            </span>
+          </div>
+        </div>
+        <p>{task.notes ?? "还没有补充说明，等待进一步澄清。"}</p>
+        <div className="task-row-meta">
+          {task.tags.length > 0 ? <span>标签: {task.tags.join(" / ")}</span> : null}
+          {task.dueAt ? (
+            <span>截止: {new Date(task.dueAt).toLocaleDateString()}</span>
+          ) : (
+            <span>截止: 未设置</span>
+          )}
+          <span>
+            看板列:{" "}
+            {strategy.boardConfig.columns.find((column) => column.id === task.strategyBucket)
+              ?.label ?? task.strategyBucket}
+          </span>
+        </div>
+
+        {isEditing ? (
+          <div className="task-inline-editor">
+            <label>
+              <span>状态</span>
+              <select
+                value={task.status}
+                onChange={(event) =>
+                  void handleQuickUpdate("status", event.target.value)
+                }
+              >
+                {Object.entries(statusLabel).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>优先级</span>
+              <select
+                value={task.priority}
+                onChange={(event) =>
+                  void handleQuickUpdate("priority", event.target.value)
+                }
+              >
+                {Object.entries(priorityLabel).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>看板列</span>
+              <select
+                value={task.strategyBucket}
+                onChange={(event) =>
+                  void handleQuickUpdate("strategyBucket", event.target.value)
+                }
+              >
+                {strategy.boardConfig.columns.map((column) => (
+                  <option key={column.id} value={column.id}>
+                    {column.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>截止日期</span>
+              <input
+                type="date"
+                value={dateInputValueFrom(task.dueAt)}
+                onChange={(event) =>
+                  void handleQuickUpdate("dueAt", event.target.value)
+                }
+              />
+            </label>
+            <label className="task-notes-field">
+              <span>任务备注</span>
+              <textarea
+                value={noteDraft}
+                onChange={(event) => setNoteDraft(event.target.value)}
+                onBlur={() => void saveNotes()}
+                placeholder="补充上下文、阻塞点或交接信息"
+              />
+            </label>
+            <div className="task-inline-editor-actions">
+              <button
+                type="button"
+                className="task-action-button"
+                onClick={() => void saveNotes()}
+                disabled={isSavingNotes}
+              >
+                保存备注
+              </button>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => setIsEditing(false)}
+              >
+                收起编辑
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+      <div className="task-row-actions">
+        <button
+          type="button"
+          className="task-action-button"
+          onClick={() => setIsEditing((current) => !current)}
+        >
+          {isEditing ? "收起" : "编辑"}
+        </button>
+        <button
+          type="button"
+          className="task-action-button"
+          onClick={() => void onCompleteTask(task.id)}
+          disabled={task.status === "done"}
+        >
+          完成
+        </button>
+        <button
+          type="button"
+          className="task-action-button"
+          onClick={() => void onArchiveTask(task.id)}
+        >
+          归档
+        </button>
+        <button
+          type="button"
+          className="task-action-button"
+          onClick={() => void onRememberTask(task)}
+        >
+          存入记忆
+        </button>
+      </div>
+    </article>
+  );
+}
+
 export function TaskListView({
   tasks,
   strategy,
-  pending,
   onCompleteTask,
   onArchiveTask,
   onRememberTask,
   onStartFocusSession,
+  onUpdateTask,
 }: TaskListViewProps) {
   const visibleTasks = tasks.filter((task) => task.status !== "archived");
   const groupedColumns = strategy.boardConfig.columns
@@ -80,58 +314,15 @@ export function TaskListView({
               </header>
               <div className="task-group-list">
                 {column.tasks.map((task) => (
-                  <article key={task.id} className="task-row">
-                    <div className={`task-status-dot ${statusToneClass[task.status]}`} />
-                    <div className="task-row-main">
-                      <div className="task-row-top">
-                        <strong>{task.title}</strong>
-                        <div className="task-row-tags">
-                          <span className="pill">{statusLabel[task.status]}</span>
-                          <span className="pill">{priorityLabel[task.priority]}</span>
-                          <span className="pill">
-                            {task.type === "project" ? "项目" : "任务"}
-                          </span>
-                        </div>
-                      </div>
-                      <p>{task.notes ?? "还没有补充说明，等待进一步澄清。"}</p>
-                      <div className="task-row-meta">
-                        {task.tags.length > 0 ? (
-                          <span>标签: {task.tags.join(" / ")}</span>
-                        ) : null}
-                        {task.dueAt ? (
-                          <span>
-                            截止: {new Date(task.dueAt).toLocaleDateString()}
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                    <div className="task-row-actions">
-                      <button
-                        type="button"
-                        className="task-action-button"
-                        onClick={() => onCompleteTask(task.id)}
-                        disabled={pending || task.status === "done"}
-                      >
-                        完成
-                      </button>
-                      <button
-                        type="button"
-                        className="task-action-button"
-                        onClick={() => onArchiveTask(task.id)}
-                        disabled={pending}
-                      >
-                        归档
-                      </button>
-                      <button
-                        type="button"
-                        className="task-action-button"
-                        onClick={() => onRememberTask(task)}
-                        disabled={pending}
-                      >
-                        存入记忆
-                      </button>
-                    </div>
-                  </article>
+                  <EditableTaskRow
+                    key={task.id}
+                    task={task}
+                    strategy={strategy}
+                    onCompleteTask={onCompleteTask}
+                    onArchiveTask={onArchiveTask}
+                    onRememberTask={onRememberTask}
+                    onUpdateTask={onUpdateTask}
+                  />
                 ))}
               </div>
             </section>

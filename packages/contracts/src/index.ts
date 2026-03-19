@@ -72,6 +72,40 @@ export const memorySchema = z.object({
 });
 export type Memory = z.infer<typeof memorySchema>;
 
+export const privacyPolicySchema = z.object({
+  version: z.literal("2026-03"),
+  notes: z.string(),
+  tags: z.string(),
+  memories: z.string(),
+  taskNoteCharLimit: z.number().int().positive(),
+  memoryCharLimit: z.number().int().positive(),
+  maxTagsPerTask: z.number().int().positive(),
+});
+export type PrivacyPolicy = z.infer<typeof privacyPolicySchema>;
+
+export const taskContextSchema = z.object({
+  id: z.string(),
+  title: z.string().min(1),
+  type: taskTypeSchema,
+  status: taskStatusSchema,
+  strategyBucket: z.string(),
+  priority: taskPrioritySchema,
+  dueAt: z.string().datetime().nullable().optional(),
+  notesExcerpt: z.string().nullable().optional(),
+  tags: z.array(z.string()).max(3),
+  redactionFlags: z.array(z.string()).max(6),
+});
+export type TaskContext = z.infer<typeof taskContextSchema>;
+
+export const memoryContextSchema = z.object({
+  id: z.string(),
+  category: memoryCategorySchema,
+  salience: z.number().min(0).max(1),
+  summary: z.string().min(1),
+  redactionFlags: z.array(z.string()).max(4),
+});
+export type MemoryContext = z.infer<typeof memoryContextSchema>;
+
 export const memoryInputSchema = z.object({
   kind: memoryKindSchema.default("long_term"),
   category: memoryCategorySchema,
@@ -125,9 +159,10 @@ export type StrategyPluginSnapshot = z.infer<typeof strategyPluginSchema>;
 export const aiContextBundleSchema = z.object({
   userMessage: z.string().min(1),
   activeStrategy: strategyPluginSchema,
+  privacyPolicy: privacyPolicySchema,
   recentTurns: z.array(conversationTurnSchema).max(10),
-  retrievedTasks: z.array(taskSchema).max(10),
-  retrievedMemories: z.array(memorySchema).max(8),
+  retrievedTasks: z.array(taskContextSchema).max(10),
+  retrievedMemories: z.array(memoryContextSchema).max(8),
   uiStateSnapshot: z.object({
     taskCounts: z.record(z.string(), z.number()),
     boardMode: z.enum(["kanban", "quadrants", "focus"]),

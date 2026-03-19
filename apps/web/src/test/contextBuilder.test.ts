@@ -71,5 +71,80 @@ describe("buildAIContextBundle", () => {
     expect(bundle.retrievedTasks.length).toBeLessThanOrEqual(10);
     expect(bundle.retrievedMemories.length).toBeLessThanOrEqual(8);
     expect(bundle.retrievedTasks.every((task) => task.title.includes("展会"))).toBe(true);
+    expect(bundle.privacyPolicy.version).toBe("2026-03");
+  });
+
+  it("redacts sensitive task notes, tags, and memory metadata before upload", async () => {
+    const database = createTestDatabase();
+    const repositories = createRepositories(database);
+    const embeddingClient = new MockEmbeddingClient();
+
+    await repositories.settings.ensureDefaults();
+
+    const [task] = await repositories.tasks.batchCreate(
+      [
+        {
+          title: "联系展会供应商",
+          type: "task",
+          status: "next",
+          strategyBucket: "next-actions",
+          priority: "high",
+          notes:
+            "供应商邮箱 vendor@example.com，备用电话 13800138000，后台 token sk-secret-123456789。",
+          tags: ["展会", "vendor@example.com", "super-secret-tag", "长期合作"],
+        },
+      ],
+      "next-actions",
+    );
+    const taskEmbedding = await embeddingClient.embedText(task.title);
+    await repositories.embeddings.put({
+      itemId: task.id,
+      itemType: "task",
+      content: task.title,
+      vector: taskEmbedding.vector,
+      provider: taskEmbedding.provider,
+      updatedAt: task.updatedAt,
+    });
+
+    const memory = await repositories.memories.upsert({
+      kind: "long_term",
+      category: "pattern",
+      summary:
+        "供应商联系人是 vendor@example.com，确认预算时会附带内部链接 https://secret.example.com/runbook。",
+      sourceTurnIds: ["turn-1", "turn-2"],
+      salience: 0.91,
+    });
+    const memoryEmbedding = await embeddingClient.embedText(memory.summary);
+    await repositories.embeddings.put({
+      itemId: memory.id,
+      itemType: "memory",
+      content: memory.summary,
+      vector: memoryEmbedding.vector,
+      provider: memoryEmbedding.provider,
+      updatedAt: memory.createdAt,
+    });
+
+    const bundle = await buildAIContextBundle({
+      database,
+      userMessage: "帮我继续推进展会供应商沟通",
+      activeStrategy: getStrategyPlugin("gtd"),
+      embeddingClient,
+      isOnline: true,
+    });
+
+    expect(bundle.retrievedTasks[0]?.notesExcerpt).toContain("[已隐藏]");
+    expect(bundle.retrievedTasks[0]?.notesExcerpt).not.toContain("vendor@example.com");
+    expect(bundle.retrievedTasks[0]?.tags).toHaveLength(3);
+    expect(bundle.retrievedTasks[0]?.redactionFlags).toContain("masked-tag");
+    expect(bundle.retrievedMemories[0]?.summary).toContain("[已隐藏]");
+    expect(
+      Object.prototype.hasOwnProperty.call(bundle.retrievedTasks[0] ?? {}, "notes"),
+    ).toBe(false);
+    expect(
+      Object.prototype.hasOwnProperty.call(
+        bundle.retrievedMemories[0] ?? {},
+        "sourceTurnIds",
+      ),
+    ).toBe(false);
   });
 });

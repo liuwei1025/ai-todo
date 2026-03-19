@@ -109,6 +109,10 @@ export const createRepositories = (database: AITodoDB) => ({
       });
       return updatedTasks;
     },
+    async updateOne(id: string, patch: Omit<TaskUpdateInput, "id">) {
+      const [updatedTask] = await this.updateMany([{ id, ...patch }]);
+      return updatedTask ?? null;
+    },
     async archiveMany(taskIds: string[]) {
       return this.updateMany(
         taskIds.map((taskId) => ({ id: taskId, status: "archived" as const })),
@@ -199,6 +203,21 @@ export const createRepositories = (database: AITodoDB) => ({
       };
       await database.memories.put(memory);
       return memory;
+    },
+    async updateSalience(id: string, salience: number) {
+      const existing = await database.memories.get(id);
+      if (!existing) {
+        return null;
+      }
+      const memory: Memory = {
+        ...existing,
+        salience: Math.min(1, Math.max(0, Number(salience.toFixed(2)))),
+      };
+      await database.memories.put(memory);
+      return memory;
+    },
+    async remove(id: string) {
+      await database.memories.delete(id);
     },
     async keywordSearch(keywords: string[], limit = 4) {
       if (keywords.length === 0) {

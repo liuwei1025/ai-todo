@@ -53,6 +53,7 @@ input,
 textarea,
 select {
   font: inherit;
+  color: inherit;
 }
 
 button {
@@ -603,6 +604,59 @@ a {
   transform: translateX(0);
 }
 
+.task-inline-editor,
+.settings-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.task-inline-editor {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid rgba(176, 203, 255, 0.12);
+  border-radius: 18px;
+  background: rgba(5, 12, 22, 0.42);
+}
+
+.task-inline-editor label,
+.settings-field {
+  display: grid;
+  gap: 8px;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+.task-inline-editor select,
+.task-inline-editor input,
+.task-inline-editor textarea,
+.settings-field input {
+  width: 100%;
+  border: 1px solid rgba(176, 203, 255, 0.14);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.task-inline-editor textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.task-inline-editor-actions,
+.settings-actions,
+.memory-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-hint,
+.settings-feedback {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.88rem;
+}
+
 .task-action-button,
 .ghost-button {
   padding: 10px 12px;
@@ -643,6 +697,10 @@ a {
 .memory-card.highlighted {
   border-color: rgba(99, 215, 176, 0.42);
   background: rgba(99, 215, 176, 0.08);
+}
+
+.memory-card.pinned {
+  border-color: rgba(255, 201, 120, 0.34);
 }
 
 .utility-drawer {

@@ -70,4 +70,50 @@ describe("repositories", () => {
     expect(memories[0]?.sourceTurnIds).toEqual(["a", "b"]);
     expect(memories[0]?.salience).toBe(0.9);
   });
+
+  it("updates a single task and supports memory curation actions", async () => {
+    const database = createTestDatabase();
+    databases.push(database);
+    const repositories = createRepositories(database);
+
+    const [task] = await repositories.tasks.batchCreate(
+      [
+        {
+          title: "准备展会物料",
+          type: "task",
+          status: "inbox",
+          strategyBucket: "inbox",
+          priority: "medium",
+          notes: null,
+          tags: ["展会"],
+        },
+      ],
+      "inbox",
+    );
+
+    const updatedTask = await repositories.tasks.updateOne(task.id, {
+      status: "next",
+      priority: "high",
+      notes: "先确认清单和负责人。",
+    });
+
+    expect(updatedTask?.status).toBe("next");
+    expect(updatedTask?.priority).toBe("high");
+    expect(updatedTask?.notes).toBe("先确认清单和负责人。");
+
+    const memory = await repositories.memories.upsert({
+      kind: "long_term",
+      category: "lesson",
+      summary: "展会筹备需要先锁定负责人。",
+      sourceTurnIds: [],
+      salience: 0.8,
+    });
+
+    const lowered = await repositories.memories.updateSalience(memory.id, 0.45);
+    expect(lowered?.salience).toBe(0.45);
+
+    await repositories.memories.remove(memory.id);
+    const memories = await repositories.memories.listAll();
+    expect(memories).toHaveLength(0);
+  });
 });

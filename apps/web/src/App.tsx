@@ -1,9 +1,15 @@
 import { useEffect, useState } from "react";
-import type { Memory, StrategyId, Task } from "@ai-todo/contracts";
+import type {
+  Memory,
+  StrategyId,
+  Task,
+  TaskUpdateInput,
+} from "@ai-todo/contracts";
 import { useLiveQuery } from "dexie-react-hooks";
 import { ChatPanel } from "./components/ChatPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
 import { RecentActivityPanel } from "./components/RecentActivityPanel";
+import { SettingsPanel } from "./components/SettingsPanel";
 import { StrategyPicker } from "./components/StrategyPicker";
 import { TaskListView } from "./components/TaskListView";
 import { createRemoteAgentClient, type AgentClient } from "./agent/api";
@@ -122,7 +128,7 @@ export default function App({
   const tasks = useLiveQuery(() => repositories.tasks.listAll(), [database], []);
   const turns = useLiveQuery(() => repositories.turns.listRecent(10), [database], []);
   const memories = useLiveQuery(
-    () => repositories.memories.listLongTerm(6),
+    () => repositories.memories.listAll(),
     [database],
     [],
   );
@@ -242,13 +248,40 @@ export default function App({
 
   const handleCompleteTask = async (taskId: string) => {
     setError(null);
-    await repositories.tasks.updateMany([{ id: taskId, status: "done" }]);
+    await handleUpdateTask(taskId, { status: "done" });
   };
 
   const handleArchiveTask = async (taskId: string) => {
     setError(null);
     await repositories.tasks.archiveMany([taskId]);
     await repositories.embeddings.removeForItem(taskId, "task");
+  };
+
+  const syncTaskEmbedding = async (task: Task | null) => {
+    if (!task) {
+      return;
+    }
+
+    const embedding = await embeddingClient.embedText(
+      [task.title, task.notes ?? "", task.tags.join(" ")].join(" "),
+    );
+    await repositories.embeddings.put({
+      itemId: task.id,
+      itemType: "task",
+      content: task.title,
+      vector: embedding.vector,
+      provider: embedding.provider,
+      updatedAt: task.updatedAt,
+    });
+  };
+
+  const handleUpdateTask = async (
+    taskId: string,
+    patch: Omit<TaskUpdateInput, "id">,
+  ) => {
+    setError(null);
+    const updatedTask = await repositories.tasks.updateOne(taskId, patch);
+    await syncTaskEmbedding(updatedTask);
   };
 
   const handleRememberTask = async (task: Task) => {
@@ -273,6 +306,33 @@ export default function App({
       provider: embedding.provider,
       updatedAt: memory.createdAt,
     });
+  };
+
+  const handleLowerMemorySalience = async (
+    memoryId: string,
+    currentSalience: number,
+  ) => {
+    setError(null);
+    await repositories.memories.updateSalience(memoryId, currentSalience - 0.15);
+  };
+
+  const handleBoostMemorySalience = async (
+    memoryId: string,
+    currentSalience: number,
+  ) => {
+    setError(null);
+    await repositories.memories.updateSalience(memoryId, currentSalience + 0.15);
+  };
+
+  const handleDeleteMemory = async (memoryId: string) => {
+    setError(null);
+    await repositories.memories.remove(memoryId);
+    await repositories.embeddings.removeForItem(memoryId, "memory");
+  };
+
+  const handleSaveAgentEndpoint = async (value: string) => {
+    setError(null);
+    await repositories.settings.set("agentEndpoint", value);
   };
 
   return (
@@ -335,11 +395,11 @@ export default function App({
             <TaskListView
               tasks={tasks}
               strategy={activeStrategy}
-              pending={pending}
               onCompleteTask={handleCompleteTask}
               onArchiveTask={handleArchiveTask}
               onRememberTask={handleRememberTask}
               onStartFocusSession={handleStartFocusSession}
+              onUpdateTask={handleUpdateTask}
             />
           </div>
 
@@ -396,9 +456,18 @@ export default function App({
           />
         </section>
 
+        <SettingsPanel
+          agentEndpoint={agentEndpointSetting?.value ?? "http://localhost:8787"}
+          activeStrategyName={activeStrategy.name}
+          onSaveAgentEndpoint={handleSaveAgentEndpoint}
+        />
+
         <MemoryPanel
           memories={memories}
           retrievedMemories={highlightedMemories}
+          onLowerSalience={handleLowerMemorySalience}
+          onBoostSalience={handleBoostMemorySalience}
+          onDeleteMemory={handleDeleteMemory}
         />
       </aside>
     </main>
