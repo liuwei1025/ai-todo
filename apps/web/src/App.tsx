@@ -12,7 +12,11 @@ import { RecentActivityPanel } from "./components/RecentActivityPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { StrategyPicker } from "./components/StrategyPicker";
 import { TaskListView } from "./components/TaskListView";
-import { createRemoteAgentClient, type AgentClient } from "./agent/api";
+import {
+  createRemoteAgentClient,
+  DEFAULT_AGENT_ENDPOINT,
+  type AgentClient,
+} from "./agent/api";
 import { buildAIContextBundle } from "./agent/context";
 import {
   BrowserEmbeddingClient,
@@ -193,7 +197,7 @@ export default function App({
     };
   }, []);
 
-  const resolvedEndpoint = agentEndpointSetting?.value ?? "http://localhost:8787";
+  const resolvedEndpoint = agentEndpointSetting?.value ?? DEFAULT_AGENT_ENDPOINT;
   const resolvedAgentClient = useMemo(
     () => agentClient ?? createRemoteAgentClient(resolvedEndpoint),
     [agentClient, resolvedEndpoint],
@@ -508,7 +512,7 @@ export default function App({
         </section>
 
         <SettingsPanel
-          agentEndpoint={agentEndpointSetting?.value ?? "http://localhost:8787"}
+          agentEndpoint={agentEndpointSetting?.value ?? DEFAULT_AGENT_ENDPOINT}
           activeStrategyName={activeStrategy.name}
           onSaveAgentEndpoint={handleSaveAgentEndpoint}
         />

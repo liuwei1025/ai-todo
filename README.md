@@ -341,7 +341,9 @@ pnpm dev:web
 默认情况下：
 
 - 前端地址通常是 `http://localhost:5173`
-- 代理地址默认是 `http://localhost:8787`
+- 前端默认把请求发到同源 `/api`
+- 开发环境会把 `/api` 反向代理到 `http://localhost:8787`
+- 生产环境需要在 nginx / CDN 层面配置 `/api` → 后端的反向代理
 - provider 默认是 `mock`
 
 ### 使用 OpenAI
@@ -356,6 +358,23 @@ PORT=8787
 ```
 
 如果没有配置 `OPENAI_API_KEY`，系统会自动回退到 `mock` provider。
+
+### 使用火山引擎（豆包）
+
+在仓库根目录或 `apps/llm-proxy` 下创建 `.env`：
+
+```bash
+LLM_PROVIDER=volcengine
+ARK_API_KEY=your_key
+ARK_MODEL=doubao-1.5-pro-256k-250115
+PORT=8787
+```
+
+- `ARK_API_KEY`：在 [火山方舟控制台](https://console.volcengine.com/ark) 获取
+- `ARK_MODEL`：模型名称或推理接入点 ID（ep-xxx 格式均可）
+- 可选 `ARK_BASE_URL` 覆盖默认的 `https://ark.cn-beijing.volces.com/api/v3`
+
+如果没有配置 `ARK_API_KEY`，系统会自动回退到 `mock` provider。
 
 ## 使用方式
 

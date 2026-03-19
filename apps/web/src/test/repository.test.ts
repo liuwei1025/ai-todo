@@ -26,7 +26,19 @@ describe("repositories", () => {
     const endpoint = await repositories.settings.get("agentEndpoint");
 
     expect(strategy?.value).toBe("deep-work");
-    expect(endpoint?.value).toBe("http://localhost:8787");
+    expect(endpoint?.value).toBe("/api");
+  });
+
+  it("migrates the legacy localhost proxy default to the same-origin endpoint", async () => {
+    const database = createTestDatabase();
+    databases.push(database);
+    const repositories = createRepositories(database);
+
+    await repositories.settings.set("agentEndpoint", "http://localhost:8787");
+    await repositories.settings.ensureDefaults();
+
+    const endpoint = await repositories.settings.get("agentEndpoint");
+    expect(endpoint?.value).toBe("/api");
   });
 
   it("trims conversation history to the latest 10 turns", async () => {

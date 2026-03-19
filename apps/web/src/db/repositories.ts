@@ -7,6 +7,7 @@ import type {
   TaskUpdateInput,
 } from "@ai-todo/contracts";
 import type { AITodoDB, EmbeddingRecord } from "./database";
+import { DEFAULT_AGENT_ENDPOINT, LEGACY_AGENT_ENDPOINT } from "../agent/api";
 
 const ISO_NOW = () => new Date().toISOString();
 
@@ -51,7 +52,14 @@ export const createRepositories = (database: AITodoDB) => ({
         writes.push(
           database.settings.put({
             key: "agentEndpoint",
-            value: "http://localhost:8787",
+            value: DEFAULT_AGENT_ENDPOINT,
+          }),
+        );
+      } else if (endpoint.value === LEGACY_AGENT_ENDPOINT) {
+        writes.push(
+          database.settings.put({
+            key: "agentEndpoint",
+            value: DEFAULT_AGENT_ENDPOINT,
           }),
         );
       }

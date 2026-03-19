@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
+import { DEFAULT_AGENT_ENDPOINT } from "../agent/api";
 
 interface SettingsPanelProps {
   agentEndpoint: string;
   activeStrategyName: string;
   onSaveAgentEndpoint: (value: string) => Promise<void>;
 }
-
-const DEFAULT_ENDPOINT = "http://localhost:8787";
 
 export function SettingsPanel({
   agentEndpoint,
@@ -22,7 +21,7 @@ export function SettingsPanel({
   }, [agentEndpoint]);
 
   const save = async (nextValue: string) => {
-    const normalized = nextValue.trim() || DEFAULT_ENDPOINT;
+    const normalized = nextValue.trim() || DEFAULT_AGENT_ENDPOINT;
     setIsSaving(true);
     setFeedback(null);
     try {
@@ -47,10 +46,10 @@ export function SettingsPanel({
       <label className="settings-field">
         <span>Agent Proxy Endpoint</span>
         <input
-          type="url"
+          type="text"
           value={draftEndpoint}
           onChange={(event) => setDraftEndpoint(event.target.value)}
-          placeholder={DEFAULT_ENDPOINT}
+          placeholder={DEFAULT_AGENT_ENDPOINT}
         />
       </label>
 
@@ -66,7 +65,7 @@ export function SettingsPanel({
         <button
           type="button"
           className="ghost-button"
-          onClick={() => void save(DEFAULT_ENDPOINT)}
+          onClick={() => void save(DEFAULT_AGENT_ENDPOINT)}
           disabled={isSaving}
         >
           恢复默认
@@ -74,7 +73,10 @@ export function SettingsPanel({
       </div>
 
       <p className="settings-hint">
-        当前前端会把脱敏后的上下文发到这个地址，本地 IndexedDB 数据不会因为改 endpoint 而丢失。
+        默认使用同源 `/api`，开发环境会反向代理到本地 `llm-proxy`，避免浏览器直接请求模型提供商时触发 CORS。
+      </p>
+      <p className="settings-hint">
+        这里改的是智能体代理入口地址，不会影响本地 IndexedDB 里的任务和记忆数据。
       </p>
       {feedback ? <p className="settings-feedback">{feedback}</p> : null}
     </section>
