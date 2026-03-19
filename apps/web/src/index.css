@@ -1,9 +1,11 @@
 :root {
   font-family: "PingFang SC", "Noto Sans SC", "Segoe UI", sans-serif;
   color: #f5f7fb;
+  --bg-glow-1: rgba(90, 140, 255, 0.18);
+  --bg-glow-2: rgba(86, 204, 242, 0.12);
   background:
-    radial-gradient(circle at top left, rgba(90, 140, 255, 0.18), transparent 28%),
-    radial-gradient(circle at right, rgba(86, 204, 242, 0.12), transparent 24%),
+    radial-gradient(circle at top left, var(--bg-glow-1), transparent 28%),
+    radial-gradient(circle at right, var(--bg-glow-2), transparent 24%),
     linear-gradient(160deg, #08111f 0%, #0d1728 52%, #0a1322 100%);
   line-height: 1.5;
   font-weight: 400;
@@ -23,7 +25,87 @@
   --accent-green: #63d7b0;
   --accent-red: #ff8f8f;
   --accent-amber: #ffc978;
+  --accent-a12: rgba(121, 184, 255, 0.12);
+  --accent-a18: rgba(121, 184, 255, 0.18);
+  --accent-a28: rgba(121, 184, 255, 0.28);
+  --accent-a42: rgba(121, 184, 255, 0.42);
+  --accent-a50: rgba(121, 184, 255, 0.50);
+  --accent-glow: rgba(152, 216, 255, 0.18);
+  --accent-glow-ring: rgba(152, 216, 255, 0.2);
+  --accent-badge: rgba(121, 184, 255, 0.14);
   --shadow: 0 24px 70px rgba(2, 6, 15, 0.38);
+}
+
+:root[data-strategy] {
+  transition:
+    --accent 300ms ease,
+    --accent-strong 300ms ease,
+    --bg-glow-1 300ms ease,
+    --bg-glow-2 300ms ease;
+}
+
+:root[data-strategy] .rail-strategy-button,
+:root[data-strategy] .command-send-button,
+:root[data-strategy] .strategy-picker button,
+:root[data-strategy] .task-group-header span {
+  transition:
+    border-color 300ms ease,
+    background 300ms ease,
+    opacity 160ms ease;
+}
+
+:root[data-strategy="eisenhower"] {
+  --bg-glow-1: rgba(255, 180, 80, 0.16);
+  --bg-glow-2: rgba(255, 210, 130, 0.10);
+  --accent: #ffc978;
+  --accent-strong: #ffd99b;
+  --accent-a12: rgba(255, 201, 120, 0.12);
+  --accent-a18: rgba(255, 201, 120, 0.18);
+  --accent-a28: rgba(255, 201, 120, 0.28);
+  --accent-a42: rgba(255, 201, 120, 0.42);
+  --accent-a50: rgba(255, 201, 120, 0.50);
+  --accent-glow: rgba(255, 217, 155, 0.18);
+  --accent-glow-ring: rgba(255, 217, 155, 0.2);
+  --accent-badge: rgba(255, 201, 120, 0.14);
+}
+
+:root[data-strategy="deep-work"] {
+  --bg-glow-1: rgba(160, 120, 255, 0.16);
+  --bg-glow-2: rgba(190, 160, 255, 0.10);
+  --accent: #c4a0ff;
+  --accent-strong: #d4b8ff;
+  --accent-a12: rgba(196, 160, 255, 0.12);
+  --accent-a18: rgba(196, 160, 255, 0.18);
+  --accent-a28: rgba(196, 160, 255, 0.28);
+  --accent-a42: rgba(196, 160, 255, 0.42);
+  --accent-a50: rgba(196, 160, 255, 0.50);
+  --accent-glow: rgba(212, 184, 255, 0.18);
+  --accent-glow-ring: rgba(212, 184, 255, 0.2);
+  --accent-badge: rgba(196, 160, 255, 0.14);
+}
+
+@property --accent {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #79b8ff;
+}
+
+@property --accent-strong {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #98d8ff;
+}
+
+@property --bg-glow-1 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(90, 140, 255, 0.18);
+}
+
+@property --bg-glow-2 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(86, 204, 242, 0.12);
 }
 
 * {
@@ -132,7 +214,7 @@ a {
 .task-action-button:hover,
 .command-send-button:hover {
   border-color: var(--line-strong);
-  background: rgba(121, 184, 255, 0.12);
+  background: var(--accent-a12);
 }
 
 .rail-strategies {
@@ -141,8 +223,8 @@ a {
 }
 
 .rail-strategy-button.active {
-  border-color: rgba(121, 184, 255, 0.5);
-  background: rgba(121, 184, 255, 0.18);
+  border-color: var(--accent-a50);
+  background: var(--accent-a18);
 }
 
 .rail-summary {
@@ -381,10 +463,10 @@ a {
 
 .command-input-shell textarea:focus {
   outline: none;
-  border-color: rgba(121, 184, 255, 0.42);
+  border-color: var(--accent-a42);
   box-shadow:
-    0 0 0 6px rgba(121, 184, 255, 0.08),
-    inset 0 0 0 1px rgba(152, 216, 255, 0.2);
+    0 0 0 6px var(--accent-a12),
+    inset 0 0 0 1px var(--accent-glow-ring);
 }
 
 .command-meta-row {
@@ -417,7 +499,7 @@ a {
 .command-send-button {
   min-height: 34px;
   padding: 7px 14px;
-  background: linear-gradient(135deg, rgba(121, 184, 255, 0.28), rgba(152, 216, 255, 0.18));
+  background: linear-gradient(135deg, var(--accent-a28), var(--accent-glow));
 }
 
 .command-send-button:disabled,
@@ -530,7 +612,7 @@ a {
   min-width: 34px;
   height: 34px;
   border-radius: 999px;
-  background: rgba(121, 184, 255, 0.14);
+  background: var(--accent-badge);
 }
 
 .task-group-list {
@@ -784,12 +866,200 @@ a {
 
 .strategy-picker button:hover,
 .strategy-picker button.active {
-  border-color: rgba(121, 184, 255, 0.42);
-  background: rgba(121, 184, 255, 0.12);
+  border-color: var(--accent-a42);
+  background: var(--accent-a12);
 }
 
 .strategy-picker small {
   color: var(--text-soft);
+}
+
+/* ── Quadrants layout (Eisenhower) ── */
+
+.task-quadrants {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+  position: relative;
+}
+
+.task-quadrant-cell {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.02);
+  min-height: 120px;
+  align-content: start;
+}
+
+.task-quadrant-cell[data-quadrant="important-urgent"] {
+  border-color: rgba(255, 143, 143, 0.3);
+  background: rgba(255, 143, 143, 0.04);
+}
+
+.task-quadrant-cell[data-quadrant="important-not-urgent"] {
+  border-color: rgba(99, 215, 176, 0.3);
+  background: rgba(99, 215, 176, 0.04);
+}
+
+.task-quadrant-cell[data-quadrant="not-important-urgent"] {
+  border-color: rgba(255, 201, 120, 0.25);
+  background: rgba(255, 201, 120, 0.03);
+}
+
+.task-quadrant-cell[data-quadrant="not-important-not-urgent"] {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.task-quadrant-cell .task-group-header h3 {
+  font-size: 0.95rem;
+}
+
+.quadrant-axis-hint {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  color: var(--text-soft);
+  opacity: 0.8;
+}
+
+.quadrant-placeholder {
+  margin: 0;
+  padding: 12px 0;
+  color: var(--text-soft);
+  font-size: 0.88rem;
+  text-align: center;
+  opacity: 0.6;
+}
+
+.quadrant-axis-label {
+  position: absolute;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-soft);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.quadrant-axis-y-top {
+  left: -2px;
+  top: 50%;
+  transform: translateY(-100%) rotate(-90deg);
+  transform-origin: left bottom;
+}
+
+.quadrant-axis-y-bottom {
+  left: -2px;
+  bottom: 50%;
+  transform: translateY(100%) rotate(-90deg);
+  transform-origin: left top;
+}
+
+.quadrant-axis-x-left {
+  top: -4px;
+  left: 25%;
+  transform: translateX(-50%);
+}
+
+.quadrant-axis-x-right {
+  top: -4px;
+  right: 25%;
+  transform: translateX(50%);
+}
+
+.task-row-compact {
+  padding: 10px 12px;
+}
+
+.task-row-compact .task-row-top strong {
+  font-size: 0.92rem;
+}
+
+.task-row-compact .task-row-meta {
+  font-size: 0.82rem;
+  margin-top: 6px;
+}
+
+/* ── Focus layout (Deep Work) ── */
+
+.task-focus-layout {
+  display: grid;
+  gap: 14px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+  grid-template-rows: auto auto auto;
+}
+
+.focus-zone {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 20px;
+}
+
+.focus-zone-deep {
+  border: 1.5px solid var(--accent-a42);
+  background: linear-gradient(
+    180deg,
+    rgba(196, 160, 255, 0.06) 0%,
+    rgba(196, 160, 255, 0.02) 100%
+  );
+}
+
+:root[data-strategy="deep-work"] .focus-zone-deep {
+  box-shadow: 0 0 24px rgba(196, 160, 255, 0.08);
+}
+
+.focus-zone-deep .task-group-header h3 {
+  font-size: 1.1rem;
+}
+
+.focus-zone-deep .task-row {
+  border-color: rgba(196, 160, 255, 0.16);
+  background: rgba(196, 160, 255, 0.04);
+}
+
+.focus-zone-supporting {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.focus-zone-shallow {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.015);
+  opacity: 0.7;
+}
+
+.focus-zone-shallow:hover {
+  opacity: 1;
+}
+
+.focus-zone-shallow .task-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.shallow-toggle {
+  font-size: 0.82rem;
+  padding: 4px 10px;
+}
+
+.focus-placeholder {
+  margin: 0;
+  padding: 14px 0;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  text-align: center;
+  opacity: 0.6;
 }
 
 @media (max-width: 1160px) {
@@ -848,6 +1118,21 @@ a {
     opacity: 1;
     transform: none;
     flex-wrap: wrap;
+  }
+
+  .task-quadrants {
+    grid-template-columns: 1fr;
+  }
+
+  .quadrant-axis-label {
+    display: none;
+  }
+
+  .task-quadrants,
+  .task-focus-layout {
+    height: auto;
+    min-height: auto;
+    overflow: visible;
   }
 
   .main-stage,

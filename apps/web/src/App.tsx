@@ -187,6 +187,10 @@ export default function App({
   );
 
   useEffect(() => {
+    document.documentElement.setAttribute("data-strategy", activeStrategyId);
+  }, [activeStrategyId]);
+
+  useEffect(() => {
     repositories.settings.ensureDefaults().catch((reason: unknown) => {
       console.error("初始化设置失败", reason);
     });
@@ -437,6 +441,7 @@ export default function App({
   return (
     <main
       className={`app-shell ${isCommandFocused ? "is-command-focused" : ""}`}
+      data-strategy={activeStrategyId}
     >
       <div className="focus-dim-layer" aria-hidden="true" />
 
