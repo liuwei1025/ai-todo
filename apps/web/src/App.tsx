@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   Memory,
   StrategyId,
@@ -105,7 +105,7 @@ export default function App({
   agentClient,
   embeddingClient = defaultEmbeddingClient,
 }: AppProps) {
-  const repositories = createRepositories(database);
+  const repositories = useMemo(() => createRepositories(database), [database]);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -114,6 +114,8 @@ export default function App({
     typeof navigator === "undefined" ? true : navigator.onLine,
   );
   const [focusMessage, setFocusMessage] = useState<string | null>(null);
+  const [focusSecondsLeft, setFocusSecondsLeft] = useState<number | null>(null);
+  const focusTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isCommandFocused, setIsCommandFocused] = useState(false);
   const [isUtilityDrawerOpen, setIsUtilityDrawerOpen] = useState(false);
 
@@ -153,7 +155,7 @@ export default function App({
     repositories.settings.ensureDefaults().catch((reason: unknown) => {
       console.error("初始化设置失败", reason);
     });
-  }, []);
+  }, [repositories]);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -183,11 +185,19 @@ export default function App({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const resolvedAgentClient =
-    agentClient ??
-    createRemoteAgentClient(
-      agentEndpointSetting?.value ?? "http://localhost:8787",
-    );
+  useEffect(() => {
+    return () => {
+      if (focusTimerRef.current) {
+        clearInterval(focusTimerRef.current);
+      }
+    };
+  }, []);
+
+  const resolvedEndpoint = agentEndpointSetting?.value ?? "http://localhost:8787";
+  const resolvedAgentClient = useMemo(
+    () => agentClient ?? createRemoteAgentClient(resolvedEndpoint),
+    [agentClient, resolvedEndpoint],
+  );
 
   const handleSend = async () => {
     const message = draft.trim();
@@ -219,12 +229,17 @@ export default function App({
       );
 
       const response = await resolvedAgentClient(contextBundle);
-      await executeToolCalls({
+      const toolResults = await executeToolCalls({
         database,
         toolCalls: response.toolCalls,
         currentStrategyId: activeStrategyId,
         embeddingClient,
       });
+      const failures = toolResults.filter((r) => r.status === "failed");
+      if (failures.length > 0) {
+        const summary = failures.map((f) => `${f.name}: ${f.error}`).join("; ");
+        setError(`部分操作失败（${failures.length}/${toolResults.length}）：${summary}`);
+      }
       await repositories.turns.add("assistant", response.message);
     } catch (reason) {
       const failureMessage =
@@ -236,15 +251,37 @@ export default function App({
   };
 
   const handleStrategyChange = async (strategyId: StrategyId) => {
-    setFocusMessage(null);
+    stopFocusSession();
     await repositories.settings.set("activeStrategyId", strategyId);
   };
 
-  const handleStartFocusSession = () => {
-    setFocusMessage(
-      "专注时段已开始。请选择一项高价值任务，暂时屏蔽浅层事务，持续专注 25 分钟。",
-    );
-  };
+  const stopFocusSession = useCallback(() => {
+    if (focusTimerRef.current) {
+      clearInterval(focusTimerRef.current);
+      focusTimerRef.current = null;
+    }
+    setFocusSecondsLeft(null);
+    setFocusMessage(null);
+  }, []);
+
+  const handleStartFocusSession = useCallback(() => {
+    stopFocusSession();
+
+    const FOCUS_DURATION_SECONDS = 25 * 60;
+    setFocusSecondsLeft(FOCUS_DURATION_SECONDS);
+    setFocusMessage("专注时段进行中，请集中处理一项高价值任务。");
+
+    focusTimerRef.current = setInterval(() => {
+      setFocusSecondsLeft((prev) => {
+        if (prev === null || prev <= 1) {
+          stopFocusSession();
+          setFocusMessage("专注时段已结束，辛苦了！你可以回顾刚才的进展或开始下一轮。");
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, [stopFocusSession]);
 
   const handleCompleteTask = async (taskId: string) => {
     setError(null);
@@ -380,7 +417,21 @@ export default function App({
           </div>
         </header>
 
-        {focusMessage ? <div className="focus-banner">{focusMessage}</div> : null}
+        {focusMessage ? (
+          <div className="focus-banner">
+            <span>
+              {focusMessage}
+              {focusSecondsLeft !== null
+                ? ` ${String(Math.floor(focusSecondsLeft / 60)).padStart(2, "0")}:${String(focusSecondsLeft % 60).padStart(2, "0")}`
+                : null}
+            </span>
+            {focusSecondsLeft !== null ? (
+              <button type="button" className="ghost-button" onClick={stopFocusSession}>
+                结束专注
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="content-grid">
           <div className="primary-column">

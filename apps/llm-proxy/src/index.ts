@@ -27,9 +27,11 @@ const summarizeContext = (bundle: AIContextBundle) => ({
 });
 
 app.get("/health", (_request, response) => {
+  const isFallback = provider.isMockFallback?.() ?? false;
   response.json({
     ok: true,
     provider: provider.id,
+    ...(isFallback && { providerActual: "mock (fallback — API key missing)" }),
   });
 });
 

@@ -3,13 +3,24 @@ import { buildPrompt } from "./prompt";
 import { makeMockResponse } from "./mock";
 import type { ProviderAdapter } from "./types";
 
-export const createOpenAIAdapter = (): ProviderAdapter => ({
-  id: "openai",
-  respond: async (bundle: AIContextBundle) => {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return makeMockResponse(bundle);
-    }
+export const createOpenAIAdapter = (): ProviderAdapter => {
+  let didWarnMissingKey = false;
+
+  return {
+    id: "openai",
+    isMockFallback: () => !process.env.OPENAI_API_KEY,
+    respond: async (bundle: AIContextBundle) => {
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) {
+        if (!didWarnMissingKey) {
+          console.warn(
+            "[openai] OPENAI_API_KEY is not set — falling back to mock provider. " +
+            "Set the key in .env to use real OpenAI inference.",
+          );
+          didWarnMissingKey = true;
+        }
+        return makeMockResponse(bundle);
+      }
 
     const model = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -49,5 +60,6 @@ export const createOpenAIAdapter = (): ProviderAdapter => ({
     }
 
     return agentResponseSchema.parse(JSON.parse(content));
-  },
-});
+    },
+  };
+};

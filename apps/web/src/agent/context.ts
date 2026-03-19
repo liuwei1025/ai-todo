@@ -149,6 +149,32 @@ const toMemoryContext = (memory: Memory): MemoryContext => {
   };
 };
 
+const includesKeyword = (haystack: string, keywords: string[]) =>
+  keywords.some((keyword) => haystack.includes(keyword));
+
+const filterTasksByKeywords = (tasks: Task[], keywords: string[], limit: number) => {
+  if (keywords.length === 0) return [];
+  return tasks
+    .filter((task) =>
+      includesKeyword(
+        [task.title, task.notes ?? "", task.tags.join(" "), task.strategyBucket]
+          .join(" ")
+          .toLowerCase(),
+        keywords,
+      ),
+    )
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, limit);
+};
+
+const filterMemoriesByKeywords = (memories: Memory[], keywords: string[], limit: number) => {
+  if (keywords.length === 0) return [];
+  return memories
+    .filter((memory) => includesKeyword(memory.summary.toLowerCase(), keywords))
+    .sort((a, b) => b.salience - a.salience)
+    .slice(0, limit);
+};
+
 export const buildAIContextBundle = async ({
   database,
   userMessage,
@@ -164,32 +190,27 @@ export const buildAIContextBundle = async ({
 }): Promise<AIContextBundle> => {
   const repositories = createRepositories(database);
   const keywords = tokenize(userMessage);
-  const [recentTurns, keywordTasks, keywordMemories, allTasks] = await Promise.all([
+
+  const [recentTurns, allTasks, allMemories, queryEmbedding] = await Promise.all([
     repositories.turns.listRecent(10),
-    repositories.tasks.keywordSearch(keywords, 6),
-    repositories.memories.keywordSearch(keywords, 4),
     repositories.tasks.listAll(),
+    repositories.memories.listAll(),
+    embeddingClient.embedText(userMessage),
   ]);
 
-  const queryEmbedding = await embeddingClient.embedText(userMessage);
+  const keywordTasks = filterTasksByKeywords(allTasks, keywords, 6);
+  const keywordMemories = filterMemoriesByKeywords(allMemories, keywords, 4);
 
   const [similarTaskEntries, similarMemoryEntries] = await Promise.all([
     repositories.embeddings.querySimilar("task", queryEmbedding.vector, 4),
     repositories.embeddings.querySimilar("memory", queryEmbedding.vector, 4),
   ]);
 
-  const [vectorTasks, vectorMemories] = await Promise.all([
-    repositories.tasks.listByIds(
-      similarTaskEntries.map((candidate) => candidate.record.itemId),
-    ),
-    repositories.memories.listAll().then((memories) =>
-      memories.filter((memory) =>
-        similarMemoryEntries.some(
-          (candidate) => candidate.record.itemId === memory.id,
-        ),
-      ),
-    ),
-  ]);
+  const similarTaskIds = new Set(similarTaskEntries.map((c) => c.record.itemId));
+  const similarMemoryIds = new Set(similarMemoryEntries.map((c) => c.record.itemId));
+
+  const vectorTasks = allTasks.filter((t) => similarTaskIds.has(t.id));
+  const vectorMemories = allMemories.filter((m) => similarMemoryIds.has(m.id));
 
   const taskCounts = allTasks.reduce<Record<string, number>>((counts, task) => {
     counts[task.status] = (counts[task.status] ?? 0) + 1;
