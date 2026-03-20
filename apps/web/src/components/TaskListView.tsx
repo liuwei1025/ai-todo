@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import type {
   StrategyPluginSnapshot,
   Task,
@@ -36,6 +36,30 @@ interface GroupedColumn {
   description?: string;
   tasks: Task[];
 }
+
+interface ColumnPreview {
+  label: string;
+  count: number;
+  previewItems: string[];
+}
+
+const strategyPresentation = {
+  gtd: {
+    eyebrow: "GTD Flow",
+    title: "先澄清，再推进",
+  },
+  eisenhower: {
+    eyebrow: "Priority Matrix",
+    title: "先判断轻重缓急",
+  },
+  "deep-work": {
+    eyebrow: "Focus Design",
+    title: "优先保护专注区块",
+  },
+} satisfies Record<
+  StrategyPluginSnapshot["id"],
+  { eyebrow: string; title: string }
+>;
 
 const priorityLabel: Record<Task["priority"], string> = {
   low: "低优先级",
@@ -324,54 +348,86 @@ const quadrantAxisLabels: Record<string, { row: string; col: string }> = {
   "not-important-not-urgent": { row: "不重要", col: "不紧急" },
 };
 
+const quadrantLayout = [
+  ["important-urgent", "important-not-urgent"],
+  ["not-important-urgent", "not-important-not-urgent"],
+] as const;
+
 function QuadrantsView({
   allColumns,
   strategy,
   ...handlers
 }: { allColumns: GroupedColumn[]; strategy: StrategyPluginSnapshot } & SharedRowHandlers) {
+  const columnById = new Map(allColumns.map((column) => [column.id, column]));
+
   return (
     <div className="task-quadrants" data-testid="task-list-view">
-      <div className="quadrant-axis-label quadrant-axis-y-top">重要</div>
-      <div className="quadrant-axis-label quadrant-axis-y-bottom">不重要</div>
-      <div className="quadrant-axis-label quadrant-axis-x-left">紧急</div>
-      <div className="quadrant-axis-label quadrant-axis-x-right">不紧急</div>
-      {allColumns.map((column) => {
-        const axis = quadrantAxisLabels[column.id];
-        return (
-          <section
-            key={column.id}
-            className={`task-quadrant-cell ${column.tasks.length === 0 ? "quadrant-empty" : ""}`}
-            data-quadrant={column.id}
-          >
-            <header className="task-group-header">
-              <div>
-                <h3>{column.label}</h3>
-                {axis && (
-                  <p className="quadrant-axis-hint">
-                    {axis.row} · {axis.col}
-                  </p>
-                )}
-              </div>
-              <span>{column.tasks.length}</span>
-            </header>
-            <div className="task-group-list">
-              {column.tasks.length > 0 ? (
-                column.tasks.map((task) => (
-                  <EditableTaskRow
-                    key={task.id}
-                    task={task}
-                    strategy={strategy}
-                    compact
-                    {...handlers}
-                  />
-                ))
-              ) : (
-                <p className="quadrant-placeholder">暂无任务</p>
-              )}
-            </div>
-          </section>
-        );
-      })}
+      <div className="quadrant-corner">
+        <span>坐标轴</span>
+      </div>
+      <div className="quadrant-column-label">
+        <strong>X = 紧急</strong>
+        <span>需要马上响应</span>
+      </div>
+      <div className="quadrant-column-label">
+        <strong>X = 不紧急</strong>
+        <span>可以主动安排节奏</span>
+      </div>
+
+      {quadrantLayout.map((row, rowIndex) => (
+        <Fragment key={`quadrant-row-${rowIndex}`}>
+          <div key={`row-${rowIndex}`} className="quadrant-row-label">
+            <strong>{rowIndex === 0 ? "Y = 重要" : "Y = 不重要"}</strong>
+            <span>{rowIndex === 0 ? "高价值工作" : "低价值工作"}</span>
+          </div>
+          {row.map((columnId) => {
+            const column = columnById.get(columnId);
+            if (!column) {
+              return null;
+            }
+
+            const axis = quadrantAxisLabels[column.id];
+
+            return (
+              <section
+                key={column.id}
+                className={`task-quadrant-cell ${column.tasks.length === 0 ? "quadrant-empty" : ""}`}
+                data-quadrant={column.id}
+              >
+                <header className="task-group-header">
+                  <div>
+                    <h3>{column.label}</h3>
+                    {axis && (
+                      <p className="quadrant-axis-hint">
+                        坐标: {axis.row} × {axis.col}
+                      </p>
+                    )}
+                    {column.description ? (
+                      <p className="quadrant-description">{column.description}</p>
+                    ) : null}
+                  </div>
+                  <span>{column.tasks.length}</span>
+                </header>
+                <div className="task-group-list">
+                  {column.tasks.length > 0 ? (
+                    column.tasks.map((task) => (
+                      <EditableTaskRow
+                        key={task.id}
+                        task={task}
+                        strategy={strategy}
+                        compact
+                        {...handlers}
+                      />
+                    ))
+                  ) : (
+                    <p className="quadrant-placeholder">暂无任务</p>
+                  )}
+                </div>
+              </section>
+            );
+          })}
+        </Fragment>
+      ))}
     </div>
   );
 }
@@ -499,6 +555,17 @@ export function TaskListView({
     tasks: visibleTasks.filter((task) => task.strategyBucket === column.id),
   }));
   const nonEmptyColumns = allColumns.filter((column) => column.tasks.length > 0);
+  const presentation = strategyPresentation[strategy.id];
+  const activeTaskCount = visibleTasks.filter((task) => task.status !== "done").length;
+  const doneTaskCount = visibleTasks.length - activeTaskCount;
+  const columnPreviews: ColumnPreview[] = allColumns.map((column) => ({
+    label: column.label,
+    count: column.tasks.length,
+    previewItems:
+      column.tasks.length > 0
+        ? column.tasks.slice(0, 2).map((task) => task.title)
+        : [column.description ?? "暂无任务"],
+  }));
 
   const handlers: SharedRowHandlers = {
     onCompleteTask,
@@ -510,6 +577,16 @@ export function TaskListView({
   const hasAnyTasks = nonEmptyColumns.length > 0;
 
   const renderContent = () => {
+    if (mode === "quadrants") {
+      return (
+        <QuadrantsView
+          allColumns={allColumns}
+          strategy={strategy}
+          {...handlers}
+        />
+      );
+    }
+
     if (!hasAnyTasks) {
       return (
         <div className="list-empty-state">
@@ -523,16 +600,6 @@ export function TaskListView({
             ))}
           </div>
         </div>
-      );
-    }
-
-    if (mode === "quadrants") {
-      return (
-        <QuadrantsView
-          allColumns={allColumns}
-          strategy={strategy}
-          {...handlers}
-        />
       );
     }
 
@@ -557,7 +624,40 @@ export function TaskListView({
 
   return (
     <section className="panel list-panel">
-      {renderContent()}
+      <div className="list-panel-header">
+        <div className="list-panel-heading">
+          <div>
+            <p className="eyebrow">{presentation.eyebrow}</p>
+            <h2>{presentation.title}</h2>
+          </div>
+          <div className="list-panel-stats">
+            <span className="pill">进行中 {activeTaskCount}</span>
+            <span className="pill">已完成 {doneTaskCount}</span>
+            <span className="pill">{strategy.name}</span>
+          </div>
+        </div>
+        <div className="list-summary-grid">
+          {columnPreviews.map((column) => (
+            <article
+              key={column.label}
+              className={`list-summary-card ${column.count === 0 ? "is-empty" : ""}`}
+            >
+              <div className="list-summary-top">
+                <strong>{column.label}</strong>
+                <span>{column.count}</span>
+              </div>
+              <div className="list-summary-items">
+                {column.previewItems.map((item, index) => (
+                  <p key={`${column.label}-${item}`}>
+                    {column.count > 0 ? `${index + 1}. ${item}` : item}
+                  </p>
+                ))}
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+      <div className="list-panel-body">{renderContent()}</div>
     </section>
   );
 }

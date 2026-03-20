@@ -5,6 +5,75 @@ import type {
 } from "@ai-todo/contracts";
 import type { ProviderAdapter } from "./types";
 
+const includesAny = (message: string, fragments: string[]) =>
+  fragments.some((fragment) => message.includes(fragment));
+
+const TASK_CAPTURE_CUES = [
+  "todo",
+  "待办",
+  "任务",
+  "项目",
+  "提醒",
+  "记一下",
+  "记个",
+  "记录",
+  "加到",
+  "加入",
+  "安排",
+  "规划",
+  "计划",
+  "拆解",
+  "拆成",
+  "梳理",
+  "整理",
+  "理一下",
+  "跟进",
+  "下一步",
+];
+
+const UNSUPPORTED_MUTATION_CUES = [
+  "更新",
+  "修改",
+  "改成",
+  "完成",
+  "归档",
+  "删除",
+  "删掉",
+];
+
+const CHAT_ONLY_CUES = [
+  "你好",
+  "hello",
+  "hi",
+  "早上好",
+  "晚上好",
+  "晚安",
+  "谢谢",
+  "哈哈",
+  "在吗",
+  "你是谁",
+  "怎么样",
+];
+
+const isExplicitTaskIntent = (message: string) =>
+  includesAny(message, TASK_CAPTURE_CUES);
+
+const isChatOnly = (rawMessage: string, normalizedMessage: string) => {
+  if (isExplicitTaskIntent(normalizedMessage)) {
+    return false;
+  }
+
+  if (includesAny(normalizedMessage, CHAT_ONLY_CUES)) {
+    return true;
+  }
+
+  if (/[?？]/.test(rawMessage)) {
+    return true;
+  }
+
+  return normalizedMessage.length <= 12;
+};
+
 export const makeMockResponse = (bundle: AIContextBundle): AgentResponse => {
   const message = bundle.userMessage.trim();
   const lower = message.toLowerCase();
@@ -49,7 +118,23 @@ export const makeMockResponse = (bundle: AIContextBundle): AgentResponse => {
   const [projectBucket, actionBucket, adminBucket] =
     strategyBucketByStrategy[bundle.activeStrategy.id];
 
-  if (lower.includes("展会")) {
+  if (isChatOnly(message, lower)) {
+    return {
+      message:
+        "我理解了这条输入，但它现在更像闲聊或普通问答，不会自动写入待办。若你要我记录或整理任务，请直接说明要新增、拆解或调整什么。",
+      toolCalls: [],
+    };
+  }
+
+  if (includesAny(lower, UNSUPPORTED_MUTATION_CUES) && !isExplicitTaskIntent(lower)) {
+    return {
+      message:
+        "我看到了你想改动已有任务的意思，但当前 mock 兜底只会在明确的新增或拆解意图下写入任务。若要修改现有任务，请在面板里直接编辑，或把目标任务说得更具体一些。",
+      toolCalls: [],
+    };
+  }
+
+  if (lower.includes("展会") && isExplicitTaskIntent(lower)) {
     return {
       message: memorySignal
         ? `我把展会项目拆成了一个项目和两条动作，并参考了这条记忆：${memorySignal}`
@@ -107,28 +192,36 @@ export const makeMockResponse = (bundle: AIContextBundle): AgentResponse => {
     };
   }
 
+  if (isExplicitTaskIntent(lower)) {
+    return {
+      message:
+        "我把这条输入识别为待办意图，先按当前策略收进任务系统；如果你愿意，我下一轮可以继续帮你拆成更细的下一步行动。",
+      toolCalls: [
+        {
+          name: "batch_create_tasks",
+          reason: "Capture the user's explicit task-management request.",
+          arguments: {
+            tasks: [
+              {
+                title: message,
+                type: "task",
+                status: "inbox",
+                strategyBucket: actionBucket,
+                priority: "medium",
+                notes: "Captured from an explicit task-management request.",
+                tags: ["inbox"],
+              },
+            ],
+          },
+        },
+      ],
+    };
+  }
+
   return {
     message:
-      "我已经理解你的输入。下一步我会优先把它转成更清晰的任务，并尽量保留可执行的下一步动作。",
-    toolCalls: [
-      {
-        name: "batch_create_tasks",
-        reason: "Turn the user's freeform request into a single actionable capture.",
-        arguments: {
-          tasks: [
-            {
-              title: message,
-              type: "task",
-              status: "inbox",
-              strategyBucket: actionBucket,
-              priority: "medium",
-              notes: "Captured from natural language input.",
-              tags: ["inbox"],
-            },
-          ],
-        },
-      },
-    ],
+      "我已经理解你的输入，但它没有明确要求我执行待办操作，所以这次不会自动创建任务。若你想让我落成 todo，请直接说“记一下”或“帮我拆成下一步行动”。",
+    toolCalls: [],
   };
 };
 

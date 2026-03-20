@@ -51,10 +51,26 @@ const strategyPlugins: Record<StrategyId, StrategyPluginSnapshot> = {
     boardConfig: {
       mode: "quadrants",
       columns: [
-        { id: "important-urgent", label: "立即处理" },
-        { id: "important-not-urgent", label: "计划安排" },
-        { id: "not-important-urgent", label: "委派或限制" },
-        { id: "not-important-not-urgent", label: "放弃或搁置" },
+        {
+          id: "important-urgent",
+          label: "立即处理",
+          description: "必须立刻推进，拖延会直接带来损失或风险。",
+        },
+        {
+          id: "important-not-urgent",
+          label: "计划安排",
+          description: "高价值但不应靠临时救火完成，需要主动留出时间。",
+        },
+        {
+          id: "not-important-urgent",
+          label: "委派或限制",
+          description: "响应压力高但价值有限，适合委派或设边界。",
+        },
+        {
+          id: "not-important-not-urgent",
+          label: "放弃或搁置",
+          description: "低价值噪音，避免挤占真正重要的工作。",
+        },
       ],
     },
   },
@@ -74,9 +90,21 @@ const strategyPlugins: Record<StrategyId, StrategyPluginSnapshot> = {
     boardConfig: {
       mode: "focus",
       columns: [
-        { id: "deep-focus", label: "深度专注" },
-        { id: "supporting", label: "支撑性工作" },
-        { id: "shallow-admin", label: "浅层事务" },
+        {
+          id: "deep-focus",
+          label: "深度专注",
+          description: "高认知负荷的关键工作，需要完整专注区块。",
+        },
+        {
+          id: "supporting",
+          label: "支撑性工作",
+          description: "为核心产出提供素材、协同或准备的任务。",
+        },
+        {
+          id: "shallow-admin",
+          label: "浅层事务",
+          description: "低认知负荷的行政杂务，适合压缩处理。",
+        },
       ],
     },
   },

@@ -139,7 +139,9 @@ describe("app integration", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("已联系主办方，等待 booth 尺寸确认。")).toBeInTheDocument();
+      expect(
+        screen.getAllByText("已联系主办方，等待 booth 尺寸确认。").length,
+      ).toBeGreaterThan(0);
     });
     expect(
       within(taskRow as HTMLElement).getByLabelText("状态"),
@@ -159,7 +161,9 @@ describe("app integration", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("已联系主办方，等待 booth 尺寸确认。")).toBeInTheDocument();
+      expect(
+        screen.getAllByText("已联系主办方，等待 booth 尺寸确认。").length,
+      ).toBeGreaterThan(0);
     });
   });
 
@@ -188,5 +192,70 @@ describe("app integration", () => {
     });
     const endpoint = await repositories.settings.get("agentEndpoint");
     expect(endpoint?.value).toBe("http://localhost:9001");
+  });
+
+  it("does not create tasks when the agent decides no todo action is needed", async () => {
+    const database = createTestDatabase();
+    const repositories = createRepositories(database);
+    const embeddingClient = new MockEmbeddingClient();
+
+    await repositories.settings.ensureDefaults();
+
+    render(
+      <App
+        database={database}
+        agentClient={async () => ({
+          message: "这条更像闲聊，我先不写入待办。若你要记录任务，请直接说明要新增或拆解什么。",
+          toolCalls: [],
+        })}
+        embeddingClient={embeddingClient}
+      />,
+    );
+
+    await userEvent.type(
+      screen.getByPlaceholderText("例如：帮我把展会项目拆成可执行的下一步行动"),
+      "哈哈今天脑子有点乱，先随便聊一句。",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "发送给智能体" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByText("这条更像闲聊，我先不写入待办。若你要记录任务，请直接说明要新增或拆解什么。").length,
+      ).toBeGreaterThan(0);
+    });
+
+    expect(
+      screen.getByText("列表里还没有可展示的任务。"),
+    ).toBeInTheDocument();
+    const tasks = await repositories.tasks.listAll();
+    expect(tasks).toHaveLength(0);
+  });
+
+  it("loads strategy showcase mock data into the list", async () => {
+    const database = createTestDatabase();
+    const repositories = createRepositories(database);
+    const embeddingClient = new MockEmbeddingClient();
+
+    await repositories.settings.ensureDefaults();
+
+    render(
+      <App
+        database={database}
+        agentClient={async () => ({ message: "noop", toolCalls: [] })}
+        embeddingClient={embeddingClient}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "面板" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "载入 深度工作示例" }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("撰写 AI TODO 策略评估文档")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("当前策略: 深度工作")).toBeInTheDocument();
+    expect(screen.getByText(/已载入 深度工作示例/)).toBeInTheDocument();
   });
 });

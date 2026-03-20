@@ -8,6 +8,7 @@ import type {
 import { useLiveQuery } from "dexie-react-hooks";
 import { ChatPanel } from "./components/ChatPanel";
 import { MemoryPanel } from "./components/MemoryPanel";
+import { MockDataPanel } from "./components/MockDataPanel";
 import { RecentActivityPanel } from "./components/RecentActivityPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { StrategyPicker } from "./components/StrategyPicker";
@@ -25,6 +26,7 @@ import {
 import { executeToolCalls } from "./agent/tools";
 import { db as defaultDb, type AITodoDB } from "./db/database";
 import { createRepositories } from "./db/repositories";
+import { getStrategyShowcasePreset } from "./mock/strategyShowcase";
 import { getStrategyPlugin, strategyList } from "./strategies";
 
 interface AppProps {
@@ -153,6 +155,10 @@ export default function App({
   const focusTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isCommandFocused, setIsCommandFocused] = useState(false);
   const [isUtilityDrawerOpen, setIsUtilityDrawerOpen] = useState(false);
+  const [loadingStrategyPresetId, setLoadingStrategyPresetId] = useState<StrategyId | null>(
+    null,
+  );
+  const [mockDataFeedback, setMockDataFeedback] = useState<string | null>(null);
 
   const activeStrategySetting = useLiveQuery(
     () => repositories.settings.get("activeStrategyId"),
@@ -245,6 +251,7 @@ export default function App({
     }
 
     setError(null);
+    setMockDataFeedback(null);
     setDraft("");
 
     await repositories.turns.add("user", message);
@@ -290,8 +297,7 @@ export default function App({
   };
 
   const handleStrategyChange = async (strategyId: StrategyId) => {
-    stopFocusSession();
-    await repositories.settings.set("activeStrategyId", strategyId);
+    await handleApplyMockData(strategyId);
   };
 
   const stopFocusSession = useCallback(() => {
@@ -356,39 +362,52 @@ export default function App({
 
   const handleArchiveTask = async (taskId: string) => {
     setError(null);
+    setMockDataFeedback(null);
     await repositories.tasks.archiveMany([taskId]);
     await repositories.embeddings.removeForItem(taskId, "task");
   };
 
-  const syncTaskEmbedding = async (task: Task | null) => {
-    if (!task) {
-      return;
-    }
+  const syncTaskEmbedding = useCallback(
+    async (task: Task | null) => {
+      if (!task) {
+        return;
+      }
 
-    const embedding = await embeddingClient.embedText(
-      [task.title, task.notes ?? "", task.tags.join(" ")].join(" "),
-    );
-    await repositories.embeddings.put({
-      itemId: task.id,
-      itemType: "task",
-      content: task.title,
-      vector: embedding.vector,
-      provider: embedding.provider,
-      updatedAt: task.updatedAt,
-    });
-  };
+      const embedding = await embeddingClient.embedText(
+        [task.title, task.notes ?? "", task.tags.join(" ")].join(" "),
+      );
+      await repositories.embeddings.put({
+        itemId: task.id,
+        itemType: "task",
+        content: task.title,
+        vector: embedding.vector,
+        provider: embedding.provider,
+        updatedAt: task.updatedAt,
+      });
+    },
+    [embeddingClient, repositories],
+  );
+
+  const syncTaskEmbeddings = useCallback(
+    async (taskList: Task[]) => {
+      await Promise.all(taskList.map((task) => syncTaskEmbedding(task)));
+    },
+    [syncTaskEmbedding],
+  );
 
   const handleUpdateTask = async (
     taskId: string,
     patch: Omit<TaskUpdateInput, "id">,
   ) => {
     setError(null);
+    setMockDataFeedback(null);
     const updatedTask = await repositories.tasks.updateOne(taskId, patch);
     await syncTaskEmbedding(updatedTask);
   };
 
   const handleRememberTask = async (task: Task) => {
     setError(null);
+    setMockDataFeedback(null);
     const summary = [task.title, task.notes]
       .filter(Boolean)
       .join("：")
@@ -416,6 +435,7 @@ export default function App({
     currentSalience: number,
   ) => {
     setError(null);
+    setMockDataFeedback(null);
     await repositories.memories.updateSalience(memoryId, currentSalience - 0.15);
   };
 
@@ -424,19 +444,44 @@ export default function App({
     currentSalience: number,
   ) => {
     setError(null);
+    setMockDataFeedback(null);
     await repositories.memories.updateSalience(memoryId, currentSalience + 0.15);
   };
 
   const handleDeleteMemory = async (memoryId: string) => {
     setError(null);
+    setMockDataFeedback(null);
     await repositories.memories.remove(memoryId);
     await repositories.embeddings.removeForItem(memoryId, "memory");
   };
 
   const handleSaveAgentEndpoint = async (value: string) => {
     setError(null);
+    setMockDataFeedback(null);
     await repositories.settings.set("agentEndpoint", value);
   };
+
+  const handleApplyMockData = useCallback(
+    async (strategyId: StrategyId) => {
+      const preset = getStrategyShowcasePreset(strategyId);
+      setError(null);
+      setLoadingStrategyPresetId(strategyId);
+      try {
+        stopFocusSession();
+        const createdTasks = await repositories.tasks.replaceAll(preset.tasks);
+        await syncTaskEmbeddings(createdTasks);
+        await repositories.settings.set("activeStrategyId", strategyId);
+        setMockDataFeedback(`已载入 ${preset.name}，当前列表用于验证 ${preset.summary}`);
+      } catch (reason) {
+        const failureMessage =
+          reason instanceof Error ? reason.message : "载入示例任务失败";
+        setError(failureMessage);
+      } finally {
+        setLoadingStrategyPresetId(null);
+      }
+    },
+    [repositories, stopFocusSession, syncTaskEmbeddings],
+  );
 
   return (
     <main
@@ -597,6 +642,13 @@ export default function App({
             onChange={handleStrategyChange}
           />
         </section>
+
+        <MockDataPanel
+          activeStrategyId={activeStrategyId}
+          loadingStrategyId={loadingStrategyPresetId}
+          feedback={mockDataFeedback}
+          onApplyPreset={handleApplyMockData}
+        />
 
         <SettingsPanel
           agentEndpoint={agentEndpointSetting?.value ?? DEFAULT_AGENT_ENDPOINT}

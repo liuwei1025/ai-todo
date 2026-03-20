@@ -9,7 +9,15 @@ import type {
 import type { AITodoDB, EmbeddingRecord } from "./database";
 import { DEFAULT_AGENT_ENDPOINT, LEGACY_AGENT_ENDPOINT } from "../agent/api";
 
-const ISO_NOW = () => new Date().toISOString();
+let lastIssuedTimestamp = 0;
+
+const ISO_NOW = () => {
+  const now = Date.now();
+  const nextTimestamp =
+    now <= lastIssuedTimestamp ? lastIssuedTimestamp + 1 : now;
+  lastIssuedTimestamp = nextTimestamp;
+  return new Date(nextTimestamp).toISOString();
+};
 
 const includesKeyword = (haystack: string, keywords: string[]) =>
   keywords.some((keyword) => haystack.includes(keyword));
@@ -97,6 +105,38 @@ export const createRepositories = (database: AITodoDB) => ({
       }));
       await database.tasks.bulkAdd(tasks);
       return tasks;
+    },
+    async replaceAll(inputs: TaskCreateInput[], defaultBucket = "inbox") {
+      const taskIds = (await database.tasks.toArray()).map((task) => task.id);
+
+      await database.transaction("rw", database.tasks, database.embeddings, async () => {
+        await database.tasks.clear();
+
+        if (taskIds.length === 0) {
+          return;
+        }
+
+        const taskEmbeddings = await database.embeddings
+          .filter(
+            (entry) =>
+              entry.itemType === "task" && taskIds.includes(entry.itemId),
+          )
+          .toArray();
+
+        if (taskEmbeddings.length > 0) {
+          await database.embeddings.bulkDelete(
+            taskEmbeddings
+              .map((entry) => entry.id)
+              .filter((id): id is number => typeof id === "number"),
+          );
+        }
+      });
+
+      if (inputs.length === 0) {
+        return [];
+      }
+
+      return this.batchCreate(inputs, defaultBucket);
     },
     async updateMany(updates: TaskUpdateInput[]) {
       const updatedTasks: Task[] = [];

@@ -17,6 +17,16 @@ const TOOL_DEFINITIONS = `Available tools (use ONLY these names and argument sha
 5. set_strategy
    arguments: { "strategyId": "gtd"|"eisenhower"|"deep-work" }`;
 
+const DECISION_POLICY = `## Decision policy
+Before deciding on any tool call, classify the user's latest message.
+
+- Treat it as todo-management intent only when the user is clearly asking to capture, plan, split, update, complete, archive, remember, or re-strategize their work using the supported tools.
+- Treat it as non-todo intent when it is casual chat, greetings, venting, pure Q&A, meta discussion about the app, or a statement that does not ask to change tasks, memories, or strategy.
+- If the user is chatting, asking for explanation, or thinking out loud without asking for a task action, return a normal helpful message and "toolCalls": [].
+- If the intent is ambiguous, ask one concise clarifying question and keep "toolCalls": [].
+- Never create placeholder tasks just because the message mentions a topic, emotion, or project name.
+- Only emit tool calls that are directly justified by the user's request and the available tools.`;
+
 const buildStrategySection = (bundle: AIContextBundle): string => {
   const { retrievalHints, toolPolicies } = bundle.activeStrategy;
   const lines: string[] = ["## Strategy guidance"];
@@ -67,6 +77,7 @@ export const buildPrompt = (bundle: AIContextBundle) =>
     bundle.activeStrategy.systemPrompt,
     buildStrategySection(bundle),
     TOOL_DEFINITIONS,
+    DECISION_POLICY,
     `## Privacy policy\n${JSON.stringify(bundle.privacyPolicy)}`,
     `## Response format\nReturn valid JSON with this exact shape:\n{ "message": "string — your reply to the user", "toolCalls": [{ "name": "tool_name", "reason": "why this action", "arguments": { ... } }] }\ntoolCalls may be an empty array if no action is needed.`,
     buildContextSection(bundle),
